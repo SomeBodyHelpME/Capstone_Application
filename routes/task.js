@@ -340,7 +340,7 @@ router.get('/cancel', function(req, res) {
 });//rouer.get('/cancel')
 
 router.post('/star', function(req, res) {
-  let status = req.body.status; // client or helper
+  let role = req.body.role; // client or helper
   let task_idx = req.body.task_idx;
   var object = {
     rating : req.body.rating,
@@ -350,19 +350,26 @@ router.post('/star', function(req, res) {
   let taskArray = [
    //1. connection 만들기 함수
    function(callback) {
-     if(!(status && object.rating)) {
+     if(!(role && object.rating)) {
        res.status(500).send({
          status : "fail",
-         message : "fail"
+         message : "wrong input"
        });
+       callback("wrong input")
+     } else if(role === "client" || role === "helper") {
+       res.status(500).send({
+         status : "fail",
+         message : "wrong input"
+       });
+       callback("wrong input");
      } else {
        pool.getConnection(function(err, connection) {
          if(err) {
            res.status(500).send({
              status : "fail",
-             message : "fail"
+             message : "internal server error : " + err
            });//res.status(500).send
-           callback(err);
+           callback("internal server error : " + err);
          } else {
            callback(null, connection);
          }
@@ -371,67 +378,99 @@ router.post('/star', function(req, res) {
    },//function(callback)
    //2. mysql query(task_idx로 helper_idx, client_idx 가져와야함)
    function(connection, callback) {
-     let searchPastTaskQuery = 'SELECT client_user_user_idx, helper_user_user_idx FROM past_task WHERE task_idx = ?';
+     let searchPastTaskQuery = 'SELECT client_user_user_idx, helper_user_user_idx, status FROM curr_task WHERE task_idx = ?';
      connection.query(searchPastTaskQuery, task_idx, function(err, result) {
        if(err) {
          res.status(500).send({
            status : "fail",
-           message : "fail"
+           message : "internal server error : " + err
          });
          connection.release();
-         callback("fail");
+         callback("internal server error : " + err);
        } else {
          if(result.length === 0) {
-           res.status(500).send({
+           res.status(500).send({             //task_idx가 잘못 되었을 경우
              status : "fail",
              message : "wrong task_idx"
            });
            connection.release();
            callback("wrong task_idx");
-         } else { //successfully search task_idx in past_task
+         } else { //successfully search task_idx in curr_task
            let client_idx = result[0].client_user_user_idx;
            let helper_idx = result[0].helper_user_user_idx;
-           callback(null, connection, client_idx, helper_idx);
+           let status = result[0].status;
+           callback(null, connection, client_idx, helper_idx, status);
          }
        }
      });//connection.query(searchPastTaskQuery)
    },
-   //3. past_task에서 별점과 코멘트 입력
-   function(connection, client_idx, helper_idx, callback) {
-     if(status === "client") {
-       let updateTaskQuery = 'UPDATE past_task SET rating_h = ?, comment_h = ? WHERE task_idx = ?';
-       connection.query(updateTaskQuery, [object.rating, object.comments, task_idx], function(err, result) {
-         if(err) {
-           res.status(500).send({
-             status : "fail",
-             message : "fail"
-           });
-           connection.release();
-           callback("fail");
-         } else {
-           callback(null, connection, helper_idx)
-         }
-       });//connection.query(updateTaskQuery)
+   //3. curr_task 별점과 코멘트 입력
+   function(connection, client_idx, helper_idx, status, callback) {
+     if(status === "a") {
+       if(role === "client") {
+         let updateTaskQuery = 'UPDATE curr_task SET rating_h = ?, comment_h = ?, status = ? WHERE task_idx = ?';
+         connection.query(updateTaskQuery, [object.rating, object.comments, "s", task_idx], function(err, result) {
+           if(err) {
+             res.status(500).send({
+               status : "fail",
+               message : "internal server error : " + err
+             });
+             connection.release();
+             callback("internal server error : " + err);
+           } else {
+             callback(null, connection, helper_idx, status);
+           }
+         });//connection.query(updateTaskQuery)
+       } else {
+         let updateTaskQuery = 'UPDATE curr_task SET rating_c = ?, comment_c = ?, status = ? WHERE task_idx = ?';
+         connection.query(updateTaskQuery, [object.rating, object.comments, "s", task_idx], function(err, result) {
+           if(err) {
+             res.status(500).send({
+               status : "fail",
+               message : "internal server error : " + err
+             });
+             connection.release();
+             callback("internal server error : " + err);
+           } else {
+             callback(null, connection, client_idx, status);
+           }
+         });//connection.query(updateTaskQuery)
+       }
      } else {
-       let updateTaskQuery = 'UPDATE past_task SET rating_c = ?, comment_c = ? WHERE task_idx = ?';
-       connection.query(updateTaskQuery, [object.rating, object.comments, task_idx], function(err, result) {
-         if(err) {
-           res.status(500).send({
-             status : "fail",
-             message : "fail"
-           });
-           connection.release();
-           callback("fail");
-         } else {
-           callback(null, connection, client_idx);
-         }
-       });//connection.query(updateTaskQuery)
+       if(role === "client") {
+         let updateTaskQuery = 'UPDATE curr_task SET rating_h = ?, comment_h = ?, status = ? WHERE task_idx = ?';
+         connection.query(updateTaskQuery, [object.rating, object.comments, "f", task_idx], function(err, result) {
+           if(err) {
+             res.status(500).send({
+               status : "fail",
+               message : "internal server error : " + err
+             });
+             connection.release();
+             callback("internal server error : " + err);
+           } else {
+             callback(null, connection, helper_idx, status);
+           }
+         });//connection.query(updateTaskQuery)
+       } else {
+         let updateTaskQuery = 'UPDATE curr_task SET rating_c = ?, comment_c = ?, status = ? WHERE task_idx = ?';
+         connection.query(updateTaskQuery, [object.rating, object.comments, "f", task_idx], function(err, result) {
+           if(err) {
+             res.status(500).send({
+               status : "fail",
+               message : "internal server error : " + err
+             });
+             connection.release();
+             callback("internal server error : " + err);
+           } else {
+             callback(null, connection, client_idx, status);
+           }
+         });//connection.query(updateTaskQuery)
+       }
      }
-
    },
    //4. 상대방의 별점횟수와 별점 select
-   function(connection, idx, callback) {
-     if(status === "client") {
+   function(connection, idx, status, callback) {
+     if(role === "client") {
        let selectOpponentQuery = 'SELECT rating, count FROM helper WHERE user_user_idx = ?';
      } else {
        let selectOpponentQuery = 'SELECT rating, count FROM client WHERE user_user_idx = ?';
@@ -441,20 +480,20 @@ router.post('/star', function(req, res) {
        if(err) {
          res.status(500).send({
            status : "fail",
-           message : "fail"
+           message : "internal server error : " + err
          });
          connection.release();
-         callback("fail");
+         callback("internal server error : " + err);
        } else {
          var rating = result[0].rating;
          var count = result[0].count;
-         callback(null, connection, idx, rating, count);
+         callback(null, connection, idx, rating, count, status);
        }
      });//connection.query(selectOpponentQuery)
    },//function(connection, idx, callback)
    //5. 별점과 횟수 추가해서 update
-   function(connection, idx, rating, count, callback) {
-     if(status === "client") {
+   function(connection, idx, rating, count, status, callback) {
+     if(role === "client") {
        let updateOpponentQuery = 'UPDATE helper SET rating = ?, count = ? WHERE user_user_idx = ?';
      } else {
        let updateOpponentQuery = 'UPDATE client SET rating = ?, count = ? WHERE user_user_idx = ?';
@@ -463,27 +502,96 @@ router.post('/star', function(req, res) {
        if(err) {
          res.status(500).send({
            status : "fail",
-           message : "fail"
+           message : "internal server error : " + err
          });
-         callback("error");
+         connection.release();      //(***) 한번만 써도 되겠지?
+         callback("internal server error : " + err);
        } else {
          if(result.changedRows != 1) {
            res.status(400).send({         // 잘못된 값이 넘어와서 제대로 수정이 되지 않은 경우
              status : "fail",
              message : "there is no change"
            });
+           connection.release();      //(***) 한번만 써도 되겠지?
            callback("there is no change");
          } else {
-           res.status(201).send({
-             status : "success",
-             message : "successfully update topic"
-           });
-           callback(null, "successfully update topic");
+
+           callback(null, connection, status);
          }
        }
-       connection.release();      //(***) 한번만 써도 되겠지?
      });//connection.query(updateOpponentQuery)
-   }//function(connection, idx, rating, count, callback)
+   },//function(connection, idx, rating, count, callback)
+   function(connection, status, callback) {         //만약 두 사람이 다 별점을 입력하였을 경우 past task로 옮김
+     if(status != "f") {
+       res.status(201).send({
+         status : "success",
+         message : "successfully update topic"
+       });
+       connection.release();
+       callback(null, "successfully update topic");
+     } else {
+       let allDoneQuery = 'SELECT * FROM curr_task WHERE task_idx = ?';
+       connection.query(allDoneQuery, task_idx, function(err, result) {
+         if(err) {
+           res.status(500).send({
+             status : "fail",
+             message : "internal server error : " + err
+           });
+           connection.release();      //(***) 한번만 써도 되겠지?
+           callback("internal server error : " + err);
+         } else {
+           let object = {
+             task_idx : result[0].task_idx,
+             task_type : result[0].task_type,
+             cost : result[0].cost,
+             details : result[0].details,
+             workplace_lat : result[0].workplace_lat,
+             workplace_long : result[0].workplace_long,
+             workplace_name : result[0].workplace_name,
+             home_lat : result[0].home_lat,
+             home_long : result[0].home_long,
+             home_name : result[0].home_name,
+             client_user_user_idx : result[0].client_user_user_idx,
+             helper_user_user_idx : result[0].helper_user_user_idx,
+             comment_h : result[0].comment_h,
+             comment_c : result[0].comment_c,
+             rating_h : result[0].rating_h,
+             rating_c : result[0].rating_c,
+           }
+           let insertPastTaskQuery = 'INSERT INTO curr_task (task_idx, task_type, cost, details, workplace_lat, workplace_long, workplace_name, home_lat, home_long, home_name, client_user_user_idx, helper_user_user_idx, comment_h, comment_c, rating_h, rating_c) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
+           connection.query(insertPastTaskQuery, [object.task_idx, object.task_type, object.cost, object.details, object.workplace_lat, object.workplace_long, object.workplace_name, object.home_lat, object.home_long, object.home_name, object.client_user_user_idx, object.helper_user_user_idx, object.comment_h, object.comment_c, object.rating_h, object.rating_c], function(err, result) {
+             if(err) {
+               res.status(500).send({
+                 status : "fail",
+                 message : "internal server error : " + err
+               });
+               connection.release();      //(***) 한번만 써도 되겠지?
+               callback("internal server error : " + err);
+             } else {
+               let deleteQuery = 'DELETE FROM curr_task WHERE task_idx = ?';
+               connection.query(deleteQuery, task_idx, function(err, result) {
+                 if(err) {
+                   res.status(500).send({
+                     status : "fail",
+                     message : "internal server error : " + err
+                   });
+                   connection.release();
+                   callback("internal server error : " + err);
+                 } else {
+                   res.status(201).send({
+                     status : "success",
+                     message : "successfully update topic & delete curr_task"
+                   });
+                   connection.release();
+                   callback(null, "successfully update topic & delete curr_task");
+                 }
+               });//connection.query(deleteQuery)
+             }
+           });//connection.query(insertPastTaskQuery)
+         }
+       });//connection.query(allDoneQuery)
+     }
+   }//function(connection, status, callback)
  ];
 
  async.waterfall(taskArray, (err, result) => {
