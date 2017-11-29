@@ -9,7 +9,7 @@ router.get('/info', function(req, res) {
 
   let taskArray = [
     function(callback) {
-      if(!(status && user_id)) {
+      if(!(status && user_id) || !(status === "client" || status === "helper")) {
         res.status(500).send({
           status : "fail",
           message : "wrong input"
@@ -412,7 +412,7 @@ router.post('/bookmark', function(req, res) {
               message : "there is no id"
             });//res.status(500).send
             connection.release();
-            callback("no id : ");
+            callback("there is no id");
           } else {
             callback(null, connection, result[0]);
           }
@@ -471,7 +471,7 @@ router.get('/log', function(req, res) {
       }
     },
     function(connection, callback) {
-      let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';   //(***)다른 테이블 만들어야 할듯, 유저객체에 레이팅이나 총 횟수가 들어가진 않으니까
+      let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';
       connection.query(user_idxQuery, user_id, function(err, result) {
         if(err) {
           res.status(500).send({
@@ -495,7 +495,23 @@ router.get('/log', function(req, res) {
       });//connection.query(user_idxQuery)
     },//funcion(connection, callback)
     function(connection, user, callback) {
-      let pastTaskQuery = 'SELECT * FROM past_task WHERE user_idx = ?';
+      let pastTaskQuery = 'SELECT * FROM past_task WHERE helper_user_user_idx = ?';
+      connection.query(pastTaskQuery, user.user_idx, function(err, result) {
+        if(err) {
+          res.status(500).send({
+            status : "fail",
+            message : "internal server error : " + err
+          });
+          connection.release();
+          callback("internal server error : " + err);
+        } else {
+          callback(null, connection, user, result);
+        }
+
+      });//connection.query(userBookmarkQuery)
+    },//function(connection, user, callback)
+    function(connection, user, helperlog, callback) {
+      let pastTaskQuery = 'SELECT * FROM past_task WHERE client_user_user_idx = ?';
       connection.query(pastTaskQuery, user.user_idx, function(err, result) {
         if(err) {
           res.status(500).send({
@@ -507,7 +523,10 @@ router.get('/log', function(req, res) {
           res.status(200).send({
             status : "success",
             message : "successfully get user past task",
-            data : result
+            data : {
+              helper : helperlog,
+              client : result
+            }
           });
           callback(null, "successfully get user past task");
         }
