@@ -138,9 +138,9 @@ router.get('/helper', function(req, res) {
   } else {
     // (***) db get connection 해야한다.
     let distanceCheckQuery = 'SELECT * FROM curr_task WHERE (? * ?) > ((workplace_lat - ?) * (workplace_lat - ?)) + ((workplace_long - ?) * (workplace_long - ?)) '
-                                                 + 'AND ? > (? * ?) > ((home_lat - ?) * (home_lat - ?)) + ((home_long - ?) * (home_long - ?))';
+                                                 + 'AND ? > (? * ?) > ((home_lat - ?) * (home_lat - ?)) + ((home_long - ?) * (home_long - ?)) AND status = ?';
     let radius = radius_func(home_lat, home_long, workplace_lat, workplace_long);
-    connection.query(distanceCheckQuery, [radius, radius, middle_lat, middle_lat, middle_long, middle_long, radius, radius, middle_lat, middle_lat, middle_long, middle_long], function(err, result) {
+    connection.query(distanceCheckQuery, [radius, radius, middle_lat, middle_lat, middle_long, middle_long, radius, radius, middle_lat, middle_lat, middle_long, middle_long, "w"], function(err, result) {
       if(err) {
         res.status(500).send({
           status : "fail",

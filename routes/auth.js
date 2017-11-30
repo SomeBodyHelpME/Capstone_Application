@@ -216,15 +216,51 @@ router.post('/register', function(req, res) {
                 status : "fail",
                 message : "failed register"
               });//res.status(500).send
+              connection.release();
               callback("failed register : " + err);
             } else {
-              res.status(201).send({
-                status : "success",
-                message : "successful registration"
-              });//res.status(201).send
-              callback(null, "successful registration");
+              let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';
+              connection.query(user_idxQuery, user.user_id, function(err, result) {
+                if(err) {
+                  res.status(500).send({
+                    status : "fail",
+                    message : "internal server error : " + err
+                  });
+                  connection.release();
+                  console.log("internal server error : " + err);
+                } else {
+                  let insertClientQuery = 'INSERT INTO client (rating, count, user_user_idx) VALUES (?,?,?)';
+                  connection.query(insertClientQuery, [0, 0, result[0].user_idx], function(err2, result2) {
+                    if(err2) {
+                      res.status(500).send({
+                        status : "fail",
+                        message : "internal server error : " + err
+                      });
+                      connection.release();
+                      console.log("internal server error : " + err);
+                    } else {
+                      let insertHelperQuery = 'INSERT INTO helper (rating, count, user_user_idx) VALUES (?,?,?)';
+                      connection.query(insertHelperQuery, [0, 0, result[0].user_idx], function(err3, result3) {
+                        if(err3) {
+                          res.status(500).send({
+                            status : "fail",
+                            message : "internal server error : " + err
+                          });
+                          connection.release();
+                          console.log("internal server error : " + err);
+                        } else {
+                          res.status(201).send({
+                            status : "success",
+                            message : "successful registration"
+                          });//res.status(201).send
+                          callback(null, "successful registration");
+                        }
+                      });//connection.query(insertHelperQuery)
+                    }
+                  });//connection.query(insertClientQuery)
+                }
+              });//connection.query(user_idxQuery)
             }
-            connection.release();
           });//connection.query(insertJoinQuery)
         }
       });//pool.getConnection
