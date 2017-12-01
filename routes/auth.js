@@ -230,7 +230,7 @@ router.post('/register', function(req, res) {
                   console.log("internal server error : " + err);
                 } else {
                   let insertClientQuery = 'INSERT INTO client (rating, count, user_user_idx) VALUES (?,?,?)';
-                  connection.query(insertClientQuery, [0, 0, result[0].user_idx], function(err2, result2) {
+                  connection.query(insertClientQuery, [0, 0, result[0].user_idx], function(err2) {
                     if(err2) {
                       res.status(500).send({
                         status : "fail",
@@ -240,7 +240,7 @@ router.post('/register', function(req, res) {
                       console.log("internal server error : " + err);
                     } else {
                       let insertHelperQuery = 'INSERT INTO helper (rating, count, user_user_idx) VALUES (?,?,?)';
-                      connection.query(insertHelperQuery, [0, 0, result[0].user_idx], function(err3, result3) {
+                      connection.query(insertHelperQuery, [0, 0, result[0].user_idx], function(err3) {
                         if(err3) {
                           res.status(500).send({
                             status : "fail",
@@ -249,11 +249,24 @@ router.post('/register', function(req, res) {
                           connection.release();
                           console.log("internal server error : " + err);
                         } else {
-                          res.status(201).send({
-                            status : "success",
-                            message : "successful registration"
-                          });//res.status(201).send
-                          callback(null, "successful registration");
+                          let insertBookMarkQuery = 'INSERT INTO bookmark (user_user_idx) VALUES (?)';
+                          connection.query(insertBookMarkQuery, result[0].user_idx, function(err4) {
+                            if(err4) {
+                              res.status(500).send({
+                                status : "fail",
+                                message : "internal server error : " + err
+                              });
+                              connection.release();
+                              console.log("internal server error : " + err);
+                            } else {
+                              res.status(201).send({
+                                status : "success",
+                                message : "successful registration"
+                              });//res.status(201).send
+                              connection.release();
+                              callback(null, "successful registration");
+                            }
+                          });//connection.query(insertBookMarkQuery)
                         }
                       });//connection.query(insertHelperQuery)
                     }
@@ -299,17 +312,21 @@ router.get('/find/id', function(req, res) {
               status : "fail",
               message : "internal server error : " + err
             });//res.status(500).send
+            console.log("internal server error : " + err);
           } else {
             if(result.length === 0) {   //second if
               res.status(500).send({
                 status : "fail",
                 message : "there is no name"
               });//res.status(500).send
+              console.log("there is no name");
             } else {
               res.status(200).send({
                 status : "success",
-                message : result[0].user_id
+                message : "successfully get data",
+                data : result[0].user_id
               });//res.status(200).send
+              console.log("successfully get data");
             }//second if
           }//first if
           connection.release();
@@ -343,18 +360,21 @@ router.get('/find/pw', function(req, res) {
               status : "fail",
               message : "internal server error : " + err
             });//res.status(500).send
+            console.log("internal server error : " + err);
           } else {
             if(result.length === 0) {   //second if
               res.status(500).send({
                 status : "fail",
                 message : "There is no id"
               });//res.status(500).send
+              console.log("There is no id");
             } else {
               res.status(200).send({
                 status : "success",
-                message : result[0].pw        //(***) pbfdk변환된 pw값이 넘어옴 이거 해결해야 함
+                message : "successfully get data",
+                data : result[0].user_pw        //(***) pbfdk변환된 pw값이 넘어옴 이거 해결해야 함
               });//res.status(200).send
-              console.log(result[0]);
+              console.log("successfully get data");
             }//second if
           }//first if
           connection.release();

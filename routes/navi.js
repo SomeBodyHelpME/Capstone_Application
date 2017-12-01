@@ -53,9 +53,9 @@ router.get('/info', function(req, res) {
     },//funcion(connection, callback)
     function(connection, user, callback) {      //(****) async waterfall방식에서 다음 함수로의 파라미터 이름 달라도 될까?
       if(status === 'client') {
-        let infoQuery = 'SELECT rating, count from client WHERE user_idx = ?';
+        var infoQuery = 'SELECT rating, count from client WHERE user_user_idx = ?';
       } else {
-        let infoQuery = 'SELECT rating, count from helper WHERE user_idx = ?';
+        var infoQuery = 'SELECT rating, count from helper WHERE user_user_idx = ?';
       }
 
       connection.query(infoQuery, user.user_idx, function(err, result) {
@@ -197,9 +197,9 @@ router.get('/mypage/set', function(req, res) {
               status : "success",
               message : "successfully get data",
               data : {
-                user_name : results[0].user_name,
-                phone : results[0].phone,
-                about : results[0].about
+                user_name : result[0].user_name,
+                phone : result[0].phone,
+                about : result[0].about
               }
             });
             callback(null, "successfully get data");
@@ -333,7 +333,7 @@ router.get('/bookmark', function(req, res) {
       });//connection.query(user_idxQuery)
     },//funcion(connection, callback)
     function(connection, user, callback) {
-      let userBookmarkQuery = 'SELECT * FROM bookmark WHERE user_idx = ?';
+      let userBookmarkQuery = 'SELECT * FROM bookmark WHERE user_user_idx = ?';
       connection.query(userBookmarkQuery, user.user_idx, function(err, result) {
         if(err) {
           res.status(500).send({
@@ -420,7 +420,7 @@ router.post('/bookmark', function(req, res) {
       });//connection.query(user_idxQuery)
     },//funcion(connection, callback)
     function(connection, user, callback) {
-      let updateUserBookmarkQuery = 'UPDATE bookmark SET home_lat = ?, home_long = ?, home_name = ?, school_lat = ?, school_long = ?, school_name = ?, company_lat = ?, company_long = ?, company_name = ? WHERE user_idx = ?';
+      let updateUserBookmarkQuery = 'UPDATE bookmark SET home_lat = ?, home_long = ?, home_name = ?, school_lat = ?, school_long = ?, school_name = ?, company_lat = ?, company_long = ?, company_name = ? WHERE user_user_idx = ?';
       connection.query(updateUserBookmarkQuery, [object.home_lat, object.home_long, object.home_name, object.school_lat, object.school_long, object.school_name, object.company_lat, object.company_long, object.company_name, user.user_idx], function(err, result) {
         if(err) {
           res.status(500).send({
@@ -471,7 +471,7 @@ router.get('/log', function(req, res) {
       }
     },
     function(connection, callback) {
-      let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';
+      let user_idxQuery = 'SELECT user_idx FROM user WHERE user_id = ?';
       connection.query(user_idxQuery, user_id, function(err, result) {
         if(err) {
           res.status(500).send({
@@ -489,14 +489,14 @@ router.get('/log', function(req, res) {
             connection.release();
             callback("no id : ");
           } else {
-            callback(null, connection, result[0]);
+            callback(null, connection, result[0].user_idx);
           }
         }
       });//connection.query(user_idxQuery)
     },//funcion(connection, callback)
-    function(connection, user, callback) {
+    function(connection, user_idx, callback) {
       let pastTaskQuery = 'SELECT * FROM past_task WHERE helper_user_user_idx = ?';
-      connection.query(pastTaskQuery, user.user_idx, function(err, result) {
+      connection.query(pastTaskQuery, user_idx, function(err, result) {
         if(err) {
           res.status(500).send({
             status : "fail",
@@ -505,14 +505,14 @@ router.get('/log', function(req, res) {
           connection.release();
           callback("internal server error : " + err);
         } else {
-          callback(null, connection, user, result);
+          callback(null, connection, user_idx, result);
         }
 
       });//connection.query(userBookmarkQuery)
     },//function(connection, user, callback)
-    function(connection, user, helperlog, callback) {
+    function(connection, user_idx, helperlog, callback) {
       let pastTaskQuery = 'SELECT * FROM past_task WHERE client_user_user_idx = ?';
-      connection.query(pastTaskQuery, user.user_idx, function(err, result) {
+      connection.query(pastTaskQuery, user_idx, function(err, result) {
         if(err) {
           res.status(500).send({
             status : "fail",
