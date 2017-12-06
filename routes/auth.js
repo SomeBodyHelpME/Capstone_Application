@@ -87,8 +87,8 @@ router.post('/login', function(req, res) {
   });
 });//router.post('/login')
 
-router.get('/register/check', function(req, res) {
-  let user_id = req.query.user_id;
+router.get('/register/check/:user_id', function(req, res) {
+  let user_id = req.params.user_id;
   let taskArray = [
     //1. connection 가져오기
     function(callback) {
