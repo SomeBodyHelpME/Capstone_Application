@@ -311,7 +311,7 @@ router.get('/bookmark', function(req, res) {
       }
     },
     function(connection, callback) {
-      let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';   //(***)다른 테이블 만들어야 할듯, 유저객체에 레이팅이나 총 횟수가 들어가진 않으니까
+      let user_idxQuery = 'SELECT user_idx FROM user WHERE user_id = ?';   //(***)다른 테이블 만들어야 할듯, 유저객체에 레이팅이나 총 횟수가 들어가진 않으니까
       connection.query(user_idxQuery, user_id, function(err, result) {
         if(err) {
           res.status(500).send({
@@ -327,14 +327,14 @@ router.get('/bookmark', function(req, res) {
             });//res.status(500).send
             callback("no id : ");
           } else {
-            callback(null, connection, result[0]);
+            callback(null, connection, result[0].user_idx);
           }
         }
       });//connection.query(user_idxQuery)
     },//funcion(connection, callback)
-    function(connection, user, callback) {
+    function(connection, user_idx, callback) {
       let userBookmarkQuery = 'SELECT * FROM bookmark WHERE user_user_idx = ?';
-      connection.query(userBookmarkQuery, user.user_idx, function(err, result) {
+      connection.query(userBookmarkQuery, user_idx, function(err, result) {
         if(err) {
           res.status(500).send({
             status : "fail",
@@ -396,7 +396,7 @@ router.post('/bookmark', function(req, res) {
       }
     },
     function(connection, callback) {
-      let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';   //(***)다른 테이블 만들어야 할듯, 유저객체에 레이팅이나 총 횟수가 들어가진 않으니까
+      let user_idxQuery = 'SELECT user_idx FROM user WHERE user_id = ?';   //(***)다른 테이블 만들어야 할듯, 유저객체에 레이팅이나 총 횟수가 들어가진 않으니까
       connection.query(user_idxQuery, user_id, function(err, result) {
         if(err) {
           res.status(500).send({
@@ -414,14 +414,14 @@ router.post('/bookmark', function(req, res) {
             connection.release();
             callback("there is no id");
           } else {
-            callback(null, connection, result[0]);
+            callback(null, connection, result[0].user_idx);
           }
         }
       });//connection.query(user_idxQuery)
     },//funcion(connection, callback)
-    function(connection, user, callback) {
+    function(connection, user_idx, callback) {
       let updateUserBookmarkQuery = 'UPDATE bookmark SET home_lat = ?, home_long = ?, home_name = ?, school_lat = ?, school_long = ?, school_name = ?, company_lat = ?, company_long = ?, company_name = ? WHERE user_user_idx = ?';
-      connection.query(updateUserBookmarkQuery, [object.home_lat, object.home_long, object.home_name, object.school_lat, object.school_long, object.school_name, object.company_lat, object.company_long, object.company_name, user.user_idx], function(err, result) {
+      connection.query(updateUserBookmarkQuery, [object.home_lat, object.home_long, object.home_name, object.school_lat, object.school_long, object.school_name, object.company_lat, object.company_long, object.company_name, user_idx], function(err, result) {
         if(err) {
           res.status(500).send({
             status : "fail",
