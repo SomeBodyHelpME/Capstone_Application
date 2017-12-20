@@ -10,7 +10,7 @@ router.get('/info', function(req, res) {
   let taskArray = [
     function(callback) {
       if(!(status && user_id) || !(status === "client" || status === "helper")) {
-        res.status(500).send({
+        res.status(400).send({
           status : "fail",
           message : "wrong input"
         });
@@ -29,59 +29,53 @@ router.get('/info', function(req, res) {
       }
     },
     function(connection, callback) {
-      let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';   //(***)다른 테이블 만들어야 할듯, 유저객체에 레이팅이나 총 횟수가 들어가진 않으니까
+      let user_idxQuery = 'SELECT user_idx FROM user WHERE user_id = ?';   //(***)다른 테이블 만들어야 할듯, 유저객체에 레이팅이나 총 횟수가 들어가진 않으니까
       connection.query(user_idxQuery, user_id, function(err, result) {
         if(err) {
           res.status(500).send({
             status : "fail",
             message : "internal server error : " + err
           });//res.status(500).send
+          connection.release();
           callback("internal server error : " + err);
         } else {
           if(result.length === 0) {
-            res.status(500).send({
+            res.status(400).send({
               status : "fail",
-              message : "there is no data in DB"
+              message : "there is no id"
             });//res.status(500).send
             connection.release();
-            callback("no id : ");
+            callback("there is no id");
           } else {
-            callback(null, connection, result[0]);
+            callback(null, connection, result[0].user_idx);
           }
         }
       });//connection.query(user_idxQuery)
     },//funcion(connection, callback)
-    function(connection, user, callback) {      //(****) async waterfall방식에서 다음 함수로의 파라미터 이름 달라도 될까?
+    function(connection, user_idx, callback) {      //(****) async waterfall방식에서 다음 함수로의 파라미터 이름 달라도 될까?
       if(status === 'client') {
         var infoQuery = 'SELECT rating, count from client WHERE user_user_idx = ?';
       } else {
         var infoQuery = 'SELECT rating, count from helper WHERE user_user_idx = ?';
       }
 
-      connection.query(infoQuery, user.user_idx, function(err, result) {
+      connection.query(infoQuery, user_idx, function(err, result) {
         if(err) {
           res.status(500).send({
             status : "fail",
             message : "internal server error : " + err
           });//res.status(500).send
+          connection.release();
           callback("internal server error : " + err);
         } else {
-          if(result.length === 0) {             //사실상 여기 들어올 가능성 0, 위에서 걸러질듯?
-            res.status(500).send({
-              status : "fail",
-              message : "there is no data in DB"
-            });//res.status(500).send
-            callback("no id : ");
-          } else {
-            res.status(200).send({
-              status : "success",
-              message : "successfully find data",
-              data : result[0]
-            })
-            callback(null, "successfully find data");
-          }
+          res.status(200).send({
+            status : "success",
+            message : "successfully find data",
+            data : result[0]
+          });
+          connection.release();
+          callback(null, "successfully find data");
         }
-        connection.release();
       });//connection.query(infoQuery)
     }//function(connection, user, callback)
   ];
@@ -98,7 +92,7 @@ router.get('/money', function(req, res) {
   let taskArray = [
     function(callback) {
       if(!user_id) {
-        res.status(500).send({
+        res.status(400).send({
           status : "fail",
           message : "wrong input"
         });
@@ -117,31 +111,33 @@ router.get('/money', function(req, res) {
       }
     },
     function(connection, callback) {
-      let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';   //(***)다른 테이블 만들어야 할듯, 유저객체에 레이팅이나 총 횟수가 들어가진 않으니까
+      let user_idxQuery = 'SELECT money FROM user WHERE user_id = ?';   //(***)다른 테이블 만들어야 할듯, 유저객체에 레이팅이나 총 횟수가 들어가진 않으니까
       connection.query(user_idxQuery, user_id, function(err, result) {
         if(err) {
           res.status(500).send({
             status : "fail",
             message : "internal server error : " + err
           });//res.status(500).send
+          connection.release();
           callback("internal server error : " + err);
         } else {
           if(result.length === 0) {
-            res.status(500).send({
+            res.status(400).send({
               status : "fail",
-              message : "wrong input"
+              message : "there is no id"
             });//res.status(500).send
-            callback("wrong input");
+            connection.release();
+            callback("there is no id");
           } else {
             res.status(200).send({
               status : "success",
               message : "successfully get money",
               data : result[0].money
             });
+            connection.release();
             callback(null, "successfully get money");
           }
         }
-        connection.release();
       });//connection.query(user_idxQuery)
     }//funcion(connection, callback)
   ];
@@ -158,7 +154,7 @@ router.get('/mypage/set', function(req, res) {
   let taskArray = [
     function(callback) {
       if(!user_id) {
-        res.status(500).send({
+        res.status(400).send({
           status : "fail",
           message : "wrong input"
         });
@@ -177,7 +173,7 @@ router.get('/mypage/set', function(req, res) {
       }
     },
     function(connection, callback) {
-      let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';   //(***)다른 테이블 만들어야 할듯, 유저객체에 레이팅이나 총 횟수가 들어가진 않으니까
+      let user_idxQuery = 'SELECT user_name, phone, about FROM user WHERE user_id = ?';   //(***)다른 테이블 만들어야 할듯, 유저객체에 레이팅이나 총 횟수가 들어가진 않으니까
       connection.query(user_idxQuery, user_id, function(err, result) {
         if(err) {
           res.status(500).send({
@@ -187,11 +183,11 @@ router.get('/mypage/set', function(req, res) {
           callback("internal server error : " + err);
         } else {
           if(result.length === 0) {
-            res.status(500).send({
+            res.status(400).send({
               status : "fail",
               message : "there is no id"
-            });//res.status(500).send
-            callback("no id : ");
+            });//res.status(400).send
+            callback("there is no id");
           } else {
             res.status(200).send({
               status : "success",
@@ -227,7 +223,7 @@ router.post('/mypage/set', function(req, res) {
   let taskArray = [
     function(callback) {
       if(!(user_id)) {
-        res.status(500).send({
+        res.status(400).send({
           status : "fail",
           message : "wrong input"
         });
@@ -292,7 +288,7 @@ router.get('/bookmark', function(req, res) {
   let taskArray = [
     function(callback) {
       if(!user_id) {
-        res.status(500).send({
+        res.status(400).send({
           status : "fail",
           message : "wrong input"
         });
@@ -321,7 +317,7 @@ router.get('/bookmark', function(req, res) {
           callback("internal server error : " + err);
         } else {
           if(result.length === 0) {
-            res.status(500).send({
+            res.status(400).send({
               status : "fail",
               message : "there is no id"
             });//res.status(500).send
@@ -377,7 +373,7 @@ router.post('/bookmark', function(req, res) {
   let taskArray = [
     function(callback) {
       if(!user_id) {
-        res.status(500).send({
+        res.status(400).send({
           status : "fail",
           message : "wrong input"
         });
@@ -407,7 +403,7 @@ router.post('/bookmark', function(req, res) {
           callback("internal server error : " + err);
         } else {
           if(result.length === 0) {
-            res.status(500).send({
+            res.status(400).send({
               status : "fail",
               message : "there is no id"
             });//res.status(500).send
@@ -452,7 +448,7 @@ router.get('/log', function(req, res) {
   let taskArray = [
     function(callback) {
       if(!user_id) {
-        res.status(500).send({
+        res.status(400).send({
           status : "fail",
           message : "wrong input"
         });
@@ -482,12 +478,12 @@ router.get('/log', function(req, res) {
           callback("internal server error : " + err);
         } else {
           if(result.length === 0) {
-            res.status(500).send({
+            res.status(400).send({
               status : "fail",
               message : "there is no id"
             });//res.status(500).send
             connection.release();
-            callback("no id : ");
+            callback("there is no id");
           } else {
             callback(null, connection, result[0].user_idx);
           }

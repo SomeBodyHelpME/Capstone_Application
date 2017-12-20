@@ -3,6 +3,102 @@ var router = express.Router();
 var async = require('async');
 var pool = require('../config/dbPool');
 var moment = require('moment');
+//var admin = require("firebase-admin");
+//var serviceAccount = require("somebodyhelpme-52033-firebase-adminsdk-9074j-246da2b765.json");
+
+// admin.initializeApp({
+//   credential: admin.credential.cert(serviceAccount),
+//   databaseURL: "https://<DATABASE_NAME>.firebaseio.com"
+// });
+
+router.get('/client/check', function(req, res) {
+  let user_id = req.query.user_id;
+
+  let taskArray = [
+    //1. connection 만들기 함수
+    function(callback) {
+      if(!user_id) {
+        res.status(400).send({
+          status : "fail",
+          message : "wrong input"
+        });
+        callback("wrong input");
+      } else {
+        pool.getConnection(function(err, connection) {
+          if(err) {
+            res.status(500).send({
+              status : "fail",
+              message : "internal server error : " + err
+            });//res.status(500).send
+            callback("internal server error : " + err);
+          } else {
+            callback(null, connection);
+          }
+        });//pool.getConnection
+      }
+    },
+    //2. select user_idx
+    function(connection, callback) {
+      let user_idxQuery = 'SELECT user_idx FROM user WHERE user_id = ?';
+      connection.query(user_idxQuery, user_id, function(err, result) {
+        if(err) {
+          res.status(500).send({
+            status : "fail",
+            message : "internal server error : " + err
+          });
+          connection.release();
+          callback("internal server error : " + err);
+        } else {
+          if(result.length === 0) {
+            res.status(400).send({
+              status : "fail",
+              message : "wrong input"
+            });
+            connection.release();
+            callback("wrong input");
+          } else {
+            callback(null, connection, result[0].user_idx);
+          }
+        }
+      });//connection.query(selectCommentQuery)
+    },//function(connection, callback)
+    //3. search client's task
+    function(connection, user_idx callback) {
+      let findClientTaskQuery = 'SELECT * FROM curr_task WHERE client_user_user_idx = ?';
+      connection.query(findClientTaskQuery, user_idx, function(err, result) {
+        if(err) {
+          res.status(500).send({
+            status : "fail",
+            message : "internal server error : " + err
+          });
+          connection.release();
+          callback("internal server error : " + err);
+        } else {
+          if(result.length === 0) {
+            res.status(200).send({
+              status : "success",
+              message : "There is No registered data"
+            });
+            connection.release();
+            callback(null, "There is No registered data");
+          } else {
+            res.status(200).send({
+              status : "success",
+              message : "There is registered data"
+            });
+            connection.release();
+            callback(null, "There is registered data");
+          }
+        }
+      });//connection.query(findClientTaskQuery)
+    }//function(connection, user_idx, callback)
+  ];
+
+  async.waterfall(taskArray, (err, result) => {
+    if(err) console.log(err);
+    else console.log(result);
+  });//async.waterfall
+});
 
 router.post('/client', function(req, res) {
   var user_id = req.body.user_id;
@@ -11,18 +107,16 @@ router.post('/client', function(req, res) {
     cost : req.body.cost,
     details : req.body.details,
     registertime : moment().format("YYYYMMDDHHmmss"),       //register time
-//    deadline : req.body.deadline,
-    workplace_lat : parseFloat(req.body.workplace_lat),
-    workplace_long : parseFloat(req.body.workplace_long),
-    workplace_name : parseFloat(req.body.workplace_name),
-    home_lat : parseFloat(req.body.home_lat),
-    home_long : parseFloat(req.body.home_long),
-    home_name : parseFloat(req.body.home_name),
+    deadline : req.body.deadline,
+    requiredtime : req.body.requiredtime,                   //hour
+    dest_lat : parseFloat(req.body.dest_lat),
+    dest_long : parseFloat(req.body.dest_long),
+    dest_name : req.body.dest_name,
     status : "w"
   };
 
-  if(!(user_id && object.task_type && object.cost && object.details && object.workplace_lat && object.workplace_long && object.workplace_name && object.home_lat && object.home_long && object.home_name)) {
-    res.status(500).send({
+  if(!(user_id && object.task_type && object.cost && object.details && object.dest_lat && object.dest_long && object.dest_name && object.requiredtime)) {
+    res.status(400).send({
       status : "fail",
       message : "wrong input"
     });
@@ -46,7 +140,7 @@ router.post('/client', function(req, res) {
             console.log("internal server error : " + err);
           } else {
             if(result.length === 0) {
-              res.status(500).send({
+              res.status(400).send({
                 status : "fail",
                 message : "wrong input"
               });
@@ -61,8 +155,8 @@ router.post('/client', function(req, res) {
                   });
                   console.log("internal server error : " + err);
                 } else {
-                  let registerTaskQuery = 'INSERT INTO curr_task (task_type, cost, details, registertime, deadline, workplace_lat, workplace_long, workplace_name, home_lat, home_long, home_name, status, client_user_user_idx, client_rating, client_count) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
-                  connection.query(registerTaskQuery, [object.task_type, object.cost, object.details, object.registertime, "20181230120000", object.workplace_lat, object.workplace_long, object.workplace_name, object.home_lat, object.home_long, object.home_name, object.status, result[0].user_idx, result2[0].rating, result2[0].count], function(err1) {
+                  let registerTaskQuery = 'INSERT INTO curr_task (task_type, cost, details, registertime, deadline, dest_lat, dest_long, dest_name, status, client_user_user_idx, client_rating, client_count, requiredtime) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)';
+                  connection.query(registerTaskQuery, [object.task_type, object.cost, object.details, object.registertime, object.deadline, object.dest_lat, object.dest_long, object.dest_name, object.status, result[0].user_idx, result2[0].rating, result2[0].count, object.requiredtime], function(err1) {
                     if(err1) {
                       res.status(500).send({
                         status : "fail",
@@ -70,11 +164,23 @@ router.post('/client', function(req, res) {
                       });
                       console.log("internal server error : " + err);
                     } else {
-                      res.status(201).send({
-                        status : "success",
-                        message : "successfully register current task"
-                      });//res.status(201)
-                      console.log("successfully register current task");
+                      let taskIndexQuery = 'SELECT task_idx FROM curr_task WHERE client_user_user_idx = ?';
+                      connection.query(taskIndexQuery, result[0].user_idx, function(err2, result3) {
+                        if(err2) {
+                          res.status(500).send({
+                            status : "fail",
+                            message : "internal server error : " + err
+                          });
+                          console.log("internal server error : " + err);
+                        } else {
+                          res.status(201).send({
+                            status : "success",
+                            message : "successfully register current task",
+                            data : result3[0].task_idx
+                          });//res.status(201)
+                          console.log("successfully register current task");
+                        }
+                      });
                     }
                   });//connection.query(registerTaskQuery)
                 }
@@ -109,12 +215,14 @@ router.get('/helper', function(req, res) {
   var workplace_lat = parseFloat(req.query.workplace_lat);
   var workplace_long = parseFloat(req.query.workplace_long);
   var user_id = req.query.user_id;
+  var task_type = req.query.task_type;
+  var importantValue = req.query.imval; //price || distance || time
   var middle_lat = (home_lat + workplace_lat) / 2;
   var middle_long = (home_long + workplace_long) / 2;
   var radius = radius_func(home_lat, home_long, workplace_lat, workplace_long);
 
-  if(!(user_id && home_lat && home_long && workplace_lat && workplace_long)) {
-    res.status(500).send({
+  if(!(user_id && home_lat && home_long && workplace_lat && workplace_long && task_type && importantValue)) {
+    res.status(400).send({
       status : "fail",
       message : "wrong input"
     });
@@ -128,10 +236,22 @@ router.get('/helper', function(req, res) {
         });
         console.log("internal server error : " + err);
       } else {
-        let distanceCheckQuery = 'SELECT * FROM curr_task WHERE (? * ?) > ((workplace_lat - ?) * (workplace_lat - ?)) + ((workplace_long - ?) * (workplace_long - ?)) '
-                                                     + 'AND (? * ?) > ((home_lat - ?) * (home_lat - ?)) + ((home_long - ?) * (home_long - ?)) AND status = ?';
-        let radius = radius_func(home_lat, home_long, workplace_lat, workplace_long);
-        connection.query(distanceCheckQuery, [radius, radius, middle_lat, middle_lat, middle_long, middle_long, radius, radius, middle_lat, middle_lat, middle_long, middle_long, "w"], function(err, result) {
+        let distanceCheckQuery = 'SELECT * FROM curr_task WHERE (? * ?) > ((dest_lat - ?) * (dest_lat - ?)) + ((dest_long - ?) * (dest_long - ?)) AND status = ?';
+        if(importantValue === "p") {                  //price 우선
+          var additionalQuery = 'ORDER BY cost DESC';
+          var obj = [radius, radius, middle_lat, middle_lat, middle_long, middle_long, "w"];
+        } else if(importantValue === "d") {           //distance 우선
+          var additionalQuery = 'ORDER BY ((dest_lat - ?) * (dest_lat - ?)) + ((dest_long - ?) * (dest_long - ?)) + ((dest_lat - ?) * (dest_lat - ?)) + ((dest_long - ?) * (dest_long - ?))';
+          var obj = [radius, radius, middle_lat, middle_lat, middle_long, middle_long, home_lat, home_lat, home_long, home_long, workplace_lat, workplace_lat, workplace_long, workplace_long, "w"];
+        } else if(importantValue === "t") {           //time 우선
+          var additionalQuery = 'ORDER BY (cost / requiredtime) DESC';
+          var obj = [radius, radius, middle_lat, middle_lat, middle_long, middle_long, "w"];
+        } else {                                      //의뢰 등록 우선
+          var additionalQuery = 'ORDER BY task_idx';
+          var obj = [radius, radius, middle_lat, middle_lat, middle_long, middle_long, "w"];
+        }
+        var wholeQuery = distanceCheckQuery + additionalQuery;
+        connection.query(wholeQuery, obj, function(err, result) {
           if(err) {
             res.status(500).send({
               status : "fail",
@@ -153,18 +273,68 @@ router.get('/helper', function(req, res) {
     });//pool.getConnection(function(err, connection))
   }
 });//router.get('/helper')
+// router.get('/helper', function(req, res) {
+//   var home_lat = parseFloat(req.query.home_lat);
+//   var home_long = parseFloat(req.query.home_long);
+//   var workplace_lat = parseFloat(req.query.workplace_lat);
+//   var workplace_long = parseFloat(req.query.workplace_long);
+//   var user_id = req.query.user_id;
+//   var middle_lat = (home_lat + workplace_lat) / 2;
+//   var middle_long = (home_long + workplace_long) / 2;
+//   var radius = radius_func(home_lat, home_long, workplace_lat, workplace_long);
+//
+//   if(!(user_id && home_lat && home_long && workplace_lat && workplace_long)) {
+//     res.status(500).send({
+//       status : "fail",
+//       message : "wrong input"
+//     });
+//     console.log("wrong input");
+//   } else {
+//     pool.getConnection(function(err, connection) {
+//       if(err) {
+//         res.status(500).send({
+//           status : "fail",
+//           message : "internal server error : " + err
+//         });
+//         console.log("internal server error : " + err);
+//       } else {
+//         let distanceCheckQuery = 'SELECT * FROM curr_task WHERE (? * ?) > ((workplace_lat - ?) * (workplace_lat - ?)) + ((workplace_long - ?) * (workplace_long - ?)) '
+//                                                      + 'AND (? * ?) > ((home_lat - ?) * (home_lat - ?)) + ((home_long - ?) * (home_long - ?)) AND status = ?';
+//         let radius = radius_func(home_lat, home_long, workplace_lat, workplace_long);
+//         connection.query(distanceCheckQuery, [radius, radius, middle_lat, middle_lat, middle_long, middle_long, radius, radius, middle_lat, middle_lat, middle_long, middle_long, "w"], function(err, result) {
+//           if(err) {
+//             res.status(500).send({
+//               status : "fail",
+//               message : "internal server error" + err
+//             });
+//             connection.release();
+//             console.log("internal server error : " + err);
+//           } else {
+//             res.status(200).send({
+//               status : "success",
+//               message : "successfully search task",
+//               data : result
+//             });
+//             connection.release();
+//             console.log(null, "successfully search task");
+//           }
+//         });//connection.query(distanceCheckQuery)
+//       }
+//     });//pool.getConnection(function(err, connection))
+//   }
+// });//router.get('/helper')
 
+// 의뢰인이 수락 버튼 눌렀을 때(12/7 수정)
 // client가 들어오는 라우터
 // helper로 부터 푸쉬메세지를 받아서 이 라우터로 들어올 때, res.direct('/matching/waiting/' + user_id + '/' + status)로 들어옴
-router.put('/matching/waiting/:user_id/:status', function(req, res) {
-  let user_id = req.params.user_id;
-  let status = req.params.status;
-
+router.get('/matching/waiting/:client_id/:helper_id', function(req, res) {
+  let client_id = req.params.client_id;
+  let helper_id = req.params.helper_id;
   let taskArray = [
     //1. connection 만들기 함수
     function(callback) {
-      if(!(user_id && status) || !(status === "a" || status === "r")) {  //accept / refuse or reject
-        res.status(500).send({
+      if(!(client_id && helper_id)) {
+        res.status(400).send({
           status : "fail",
           message : "wrong input"
         });
@@ -185,8 +355,8 @@ router.put('/matching/waiting/:user_id/:status', function(req, res) {
     },//function(callback)
     //2. select user_idx
     function(connection, callback) {
-      let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';
-      connection.query(user_idxQuery, user_id, function(err, result) {
+      let user_idxQuery = 'SELECT user_idx, user_id FROM user WHERE user_id = ? OR user_id = ?';
+      connection.query(user_idxQuery, [client_id, helper_id], function(err, result) {
         if(err) {
           res.status(500).send({
             status : "fail",
@@ -195,19 +365,32 @@ router.put('/matching/waiting/:user_id/:status', function(req, res) {
           connection.release();
           callback("internal server error : " + err);
         } else {
-          callback(null, connection, result[0].user_idx);
+          if(result.length != 2) {
+            res.status(400).send({
+              status : "fail",
+              message : "wrong input"
+            });
+            connection.release();
+            callback("wrong input");
+          } else {
+            for(let i = 0 ; i < result.length ; i++) {
+              if(result[i].user_id === client_id) {
+                var client_idx = result[i].user_idx;
+              }
+              if(result[i].user_id === helper_id) {
+                var helper_idx = result[i].user_idx;
+              }
+            }
+            callback(null, connection, client_idx, helper_idx);
+          }
+
         }
       });//connection.query(selectCommentQuery)
     },//function(connection, callback)
     //3. change curr_task DB (Action or Waiting)
-    function(connection, user_idx, callback) {
-      if(status === "a") {
-        let state = "a";
-      } else {
-        state = "w";
-      }
-      let updateCurrTaskQuery = 'UPDATE curr_task SET status = ? WHERE helper_user_user_idx = ?';
-      connection.query(updateCurrTaskQuery, [state, user_idx], function(err, result) {
+    function(connection, client_idx, helper_idx, callback) {
+      let updateCurrTaskQuery = 'UPDATE curr_task SET status = ? AND helper_user_user_idx = ? WHERE client_user_user_idx = ?';
+      connection.query(updateCurrTaskQuery, ["a", helper_idx, client_idx], function(err, result) {
         if(err) {
           res.status(500).send({
             status : "fail",
@@ -216,24 +399,49 @@ router.put('/matching/waiting/:user_id/:status', function(req, res) {
           connection.release();
           callback("internal server error : " + err);
         } else {
-          if(status === "a") {
-            res.status(201).send({
-              status : "success",
-              message : "successfully change task status : Action"
-            });
-            connection.release();
-            callback(null, "successfully change task status : Action");
-          } else {
-            res.sattus(201).send({
-              status : "success",
-              message : "successfully change task status : Waiting"
-            });
-            connection.release();
-            callback(null, "successfully change task status : Waiting");
-          }
+          callback(null, connection, client_idx, helper_idx);
+          // res.status(201).send({
+          //   status : "success",
+          //   message : "successfully change task status : Action"
+          // });
+          // connection.release();
+          // callback(null, "successfully change task status : Action");
         }
       });//connection.query(updateCurrTaskQuery)
-    }//function(connection, user_idx, callback)
+    },//function(connection, client_idx, helper_idx, callback)
+    //4. update waiting table
+    function(connection, client_idx, helper_idx, callback) {
+      let updateWaitingQuery = 'UPDATE waiting SET status = ? WHERE client_user_user_idx = ? AND helper_user_user_idx = ?';
+      connection.query(updateWaitingQuery, ["m", client_idx, helper_idx], function(err, result) {
+        if(err) {
+          res.status(500).send({
+            status : "fail",
+            message : "internal server error : " + err
+          });
+          connection.release();
+          callback("internal server error : " + err);
+        } else {
+          let deleteOthersQuery = 'UPDATE waiting SET status = ? WHERE client_user_user_idx = ? AND status = ?';
+          connection.query(deleteOthersQuery, ["r", client_idx, "w"], function(err, result) {
+            if(err) {
+              res.status(500).send({
+                status : "fail",
+                message : "internal server error : " + err
+              });
+              connection.release();
+              callback("internal server error : " + err);
+            } else {
+              res.status(201).send({
+                status : "success",
+                message : "successfully change task status : Action"
+              });
+              connection.release();
+              callback(null, "successfully change task status : Action");
+            }
+          });//connection.query(deleteOthersQuery)
+        }
+      });//connection.query(updateWaitingQuery)
+    }
   ];
 
   async.waterfall(taskArray, (err, result) => {
@@ -244,14 +452,15 @@ router.put('/matching/waiting/:user_id/:status', function(req, res) {
 });//router.get('/matching/waiting/:user_id')
 
 // helper가 들어오는 라우터
-router.put('/matching/:task_idx', function(req, res) {
+router.get('/matching/:user_id/:task_idx', function(req, res) {
   let task_idx = req.params.task_idx;
+  let user_id = req.params.user_id;
 
   let taskArray = [
     //1. connection 만들기 함수
     function(callback) {
-      if(!(task_idx)) {
-        res.status(500).send({
+      if(!(task_idx && user_id)) {
+        res.status(400).send({
           status : "fail",
           message : "wrong input"
         });
@@ -270,10 +479,117 @@ router.put('/matching/:task_idx', function(req, res) {
         });//pool.getConnection
       }
     },//function(callback)
+    //2. user_idx check
+    function(connection, callback) {
+      let user_idxQuery = 'SELECT user_idx FROM user WHERE user_id = ?';   //(***)다른 테이블 만들어야 할듯, 유저객체에 레이팅이나 총 횟수가 들어가진 않으니까
+      connection.query(user_idxQuery, user_id, function(err, result) {
+        if(err) {
+          res.status(500).send({
+            status : "fail",
+            message : "internal server error : " + err
+          });//res.status(500).send
+          connection.release();
+          callback("internal server error : " + err);
+        } else {
+          if(result.length === 0) {   //user_id 잘못 입력받았을 경우
+            res.status(400).send({
+              status : "fail",
+              message : "wrong input"
+            });//res.status(400).send
+            connection.release();
+            callback("wrong input");
+          } else {
+            callback(null, connection, result[0].user_idx);
+          }
+        }
+      });//connection.query(user_idxQuery)
+    },//funcion(connection, callback)
+    //3. search client_idx
+    function(connection, helper_idx, callback) {
+      let searchClientIdxQuery = 'SELECT client_user_user_idx FROM curr_task WHERE task_idx = ?';
+      connection.query(searchClientIdxQuery, [task_idx], function(err, result) {
+        if(err) {
+          res.status(500).send({
+            status : "fail",
+            message : "internal server error : " + err
+          });//res.status(500).send
+          connection.release();
+          callback("internal server error : " + err);
+        } else {
+          if(result.length === 0) {   //task_idx 잘못 입력받았을 경우
+            res.status(400).send({
+              status : "fail",
+              message : "wrong input"
+            });//res.status(400).send
+            connection.release();
+            callback("wrong input");
+          } else {
+            callback(null, connection, helper_idx, result[0].user_idx);
+          }
+        }
+      });//connection.query(searchClientIdxQuery)
+    },
+    //4. waiting table insert
+    function(connection, helper_idx, client_idx, callback) {
+      let insertHelperQuery = 'INSERT INTO waiting (status, client_user_user_idx, helper_user_user_idx, curr_task_task_idx) VALUES (?, ?, ?, ?)';
+      connection.query(insertHelperQuery, ["w", client_idx, helper_idx, task_idx], function(err, result) {
+        if(err) {
+          res.status(500).send({
+            status : "fail",
+            message : "internal server error : " + err
+          });//res.status(500).send
+          connection.release();
+          callback("internal server error : " + err);
+        } else {
+          res.status(201).send({
+            status : "success",
+            message : "successfully add"
+          });
+          connection.release();
+          callback(null, "successfully add");
+        }
+      });//connection.query(insertHelperQuery)
+    }
+  ];
+
+  async.waterfall(taskArray, (err, result) => {
+    if(err) console.log(err);
+    else console.log(result);
+  });//async.waterfall
+
+});
+
+router.get('/helper/waiting', function(req, res) {
+  let user_id = req.query.user_id;
+  let task_idx = req.query.task_idx;
+
+  let taskArray = [
+    //1. connection 만들기 함수
+    function(callback) {
+      if(!(user_id && task_idx)) {
+        res.status(400).send({
+          status : "fail",
+          message : "wrong input"
+        });
+        callback("wrong input");
+      } else {
+        pool.getConnection(function(err, connection) {
+          if(err) {
+            res.status(500).send({
+              status : "fail",
+              message : "internal server error : " + err
+            });//res.status(500).send
+            callback("internal server error : " + err);
+          } else {
+            callback(null, connection);
+          }
+        });//pool.getConnection
+      }
+    },
     //2. select user_idx
     function(connection, callback) {
-      let changeCurrTaskQuery = 'UPDATE curr_task SET status = ? WHERE task_idx = ?';
-      connection.query(changeCurrTaskQuery, ["c", task_idx], function(err, result) {
+      let user_idxQuery = 'SELECT user_idx FROM user WHERE user_id = ?';
+      connection.query(user_idxQuery, user_id, function(err, result) {
         if(err) {
           res.status(500).send({
             status : "fail",
@@ -282,31 +598,72 @@ router.put('/matching/:task_idx', function(req, res) {
           connection.release();
           callback("internal server error : " + err);
         } else {
-          if(!result.changedRows) {
-            res.status(500).send({
+          if(result.length === 0) {
+            res.status(400).send({
               status : "fail",
-              message : "Wrong input : task_idx"
+              message : "wrong input"
             });
             connection.release();
-            callback("Wrong input : task_idx");
+            callback("wrong input");
           } else {
-            res.status(201).send({
-              status : "success",
-              message : "successfully change task status"
-            });
-            connection.release();
-            callback(null, "successfully change task status");
+            callback(null, connection, result[0].user_idx);
           }
         }
-      });//connection.query(changeCurrTaskQuery)
-    }//function(connection, callback)
+      });//connection.query(selectCommentQuery)
+    },//function(connection, callback)
+    //3. 무한 loop
+    function(connection, user_idx, callback) {
+      var repeat = setInterval(function() {
+        let checkWaitingQuery = 'SELECT status FROM waiting WHERE helper_user_user_idx = ? AND curr_task_task_idx = ?';
+        connection.query(checkWaitingQuery, [user_idx, task_idx], function(err, result) {
+          if(err) {
+            res.status(500).send({
+              status : "fail",
+              message : "internal server error : " + err
+            });
+            connection.release();
+            clearInterval(repeat);
+            callback("internal server error : " + err);
+          } else {
+            if(result.length === 0) {
+              res.status(400).send({
+                status : "fail",
+                message : "wrong input"
+              });
+              connection.release();
+              clearInterval(repeat);
+              callback("wrong input");
+            } else {
+              if(result[0].status === "r") {
+                res.status(200).send({
+                  status : "success",
+                  message : "match rejected"
+                });
+                connection.release();
+                clearInterval(repeat);
+                callback(null, "match rejected");
+              } else if(result[0].status === "m") {
+                res.status(200).send({
+                  status : "success",
+                  message : "match complete"
+                });
+                connection.release();
+                clearInterval(repeat);
+                callback(null, "match complete");
+
+              }
+            }
+          }
+        });//connection.query(checkWaitingQuery)
+      }, 3000);//setInterval    //3초로 세팅
+    }
+
   ];
 
   async.waterfall(taskArray, (err, result) => {
     if(err) console.log(err);
     else console.log(result);
   });//async.waterfall
-
 });
 
 router.get('/comments', function(req, res) {
@@ -338,7 +695,7 @@ router.get('/comments', function(req, res) {
     },//function(callback)
     //2. select user_idx
     function(connection, callback) {
-      let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';
+      let user_idxQuery = 'SELECT user_idx FROM user WHERE user_id = ?';
       connection.query(user_idxQuery, user_id, function(err, result) {
         if(err) {
           res.status(500).send({
@@ -348,7 +705,15 @@ router.get('/comments', function(req, res) {
           connection.release();
           callback("internal server error : " + err);
         } else {
-          callback(null, connection, result[0].user_idx);
+          if(result.length === 0) {     //user_id가 잘못 입력되었을 경우
+            res.status(400).send({
+              status : "fail",
+              message : "wrong input"
+            });
+            callback("wrong input");
+          } else {
+            callback(null, connection, result[0].user_idx);
+          }
         }
       });//connection.query(selectCommentQuery)
     },//function(connection, callback)
@@ -368,17 +733,7 @@ router.get('/comments', function(req, res) {
           connection.release();
           callback("internal server error : " + err);
         } else {
-          console.log(result);
-          if(result.length === 0) {
-            res.status(401).send({
-              status : "fail",
-              message : "there is no data in db"
-            });
-            connection.release();
-            callback("there is no data in db");
-          } else {
-            callback(null, connection, user_idx, result[0]);
-          }
+          callback(null, connection, user_idx, result[0]);
         }
       });//conection.query(findOpponentIndexQuery)
     },
@@ -416,14 +771,14 @@ router.get('/comments', function(req, res) {
               };
               object.push(data);
             }
-            res.status(200).send({
-              status : "success",
-              message : "successfully get data",
-              data : object
-            });
-            callback(null, "successfully get data");
           }
+          res.status(200).send({
+            status : "success",
+            message : "successfully get data",
+            data : object
+          });
           connection.release();
+          callback(null, "successfully get data");
         }
       });//connection.query(selectClientCommentQuery)
     }
@@ -436,14 +791,104 @@ router.get('/comments', function(req, res) {
 
 });//router.get('/comment')
 
-router.delete('/cancel', function(req, res) {
-  let user_id = req.query.id;
-  let status = req.query.status;
+router.get('/refresh', function(req, res) {
+  let user_id = req.query.user_id;
 
   let taskArray = [
     //1. connection 만들기 함수
     function(callback) {
-      if(!(user_id && status) || !(status === "client" || status === "helper")) {
+      if(!user_id) {
+        res.status(400).send({
+          status : "fail",
+          message : "wrong input"
+        });
+        callback("wrong input");
+      } else {
+        pool.getConnection(function(err, connection) {
+          if(err) {
+            res.status(500).send({
+              status : "fail",
+              message : "internal server error : " + err
+            });//res.status(500).send
+            callback("internal server error : " + err);
+          } else {
+            callback(null, connection);
+          }
+        });//pool.getConnection
+      }
+    },
+    //2. search user_idx
+    function(connection, callback) {
+      let user_idxQuery = 'SELECT user_idx FROM user WHERE user_id = ?';
+      connection.query(user_idxQuery, user_id, function(err, result) {
+        if(err) {
+          res.status(500).send({
+            status : "fail",
+            message : "internal server error : " + err
+          });
+          connection.release();
+          callback("internal server error : " + err);
+        } else {
+          if(result.length === 0) {
+            res.status(400).send({
+              status : "fail",
+              message : "wrong input"
+            });
+            connection.release();
+            callback("wrong input");
+          } else {
+            callback(null, connection, result[0].user_idx);
+          }
+        }
+      });//connection.query(selectCommentQuery)
+    },//function(connection, callback)
+    //3. finding idx
+    function(connection, user_idx, callback) {
+      let searchHelperQuery = 'SELECT * FROM waiting WHERE client_user_user_idx = ?';
+      connection.query(searchHelperQuery, user_idx, function(err, result) {
+        if(err) {
+          res.status(500).send({
+            status : "fail",
+            message : "internal server error : " + err
+          });
+          connection.release();
+          callback("internal server error : " + err);
+        } else {
+          var object = [];
+          for(let i = 0 ; i < result.length ; i++) {
+            let data = {
+              helper_idx : result[i].helper_user_user_idx,
+              client_idx : result[i].client_user_user_idx,
+              task_idx : result[i].curr_task_task_idx,
+              waiting_idx : result[i].waiting_idx
+            };
+            object.push(data);
+          }
+          res.status(200).send({
+            status : "success",
+            message : "successfully get data",
+            data : object
+          });
+          connection.release();
+          callback(null, "successfully get data");
+        }
+      });//connection.query(searchHelperQuery)
+    }
+  ];
+
+  async.waterfall(taskArray, (err, result) => {
+    if(err) console.log(err);
+    else console.log(result);
+  });//async.waterfall
+});
+
+router.delete('/cancel', function(req, res) {
+  let user_id = req.query.id;
+
+  let taskArray = [
+    //1. connection 만들기 함수
+    function(callback) {
+      if(!user_id) {
         res.status(500).send({
           status : "fail",
           message : "wrong input"
@@ -465,7 +910,7 @@ router.delete('/cancel', function(req, res) {
     },//function(callback)
     //2. select user_idx
     function(connection, callback) {
-      let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';
+      let user_idxQuery = 'SELECT user_idx FROM user WHERE user_id = ?';
       connection.query(user_idxQuery, user_id, function(err, result) {
         if(err) {
           res.status(500).send({
@@ -475,18 +920,23 @@ router.delete('/cancel', function(req, res) {
           connection.release();
           callback("internal server error : " + err);
         } else {
-          callback(null, connection, result[0].user_idx);
+          if(result.length === 0) {
+            res.status(500).send({
+              status : "fail",
+              message : "wrong input"
+            });
+            connection.release();
+            callback("wrong input");
+          } else {
+            callback(null, connection, result[0].user_idx);
+          }
         }
       });//connection.query(selectCommentQuery)
     },//function(connection, callback)
     //3. delete specific data with user_idx
     function(connection, user_idx, callback) {
-      if(status === "client") {
-        var deleteTaskQuery = 'DELETE FROM curr_task WHERE client_user_user_idx = ?';
-      } else {
-        var deleteTaskQuery = 'DELETE FROM curr_Task WHERE helper_user_user_idx = ?';
-      }
-      connection.query(deleteTaskQuery, user_idx, function(err, result) {
+      var deleteTaskQuery = 'UPDATE curr_task SET task_type = ? WHERE client_user_user_idx = ?';
+      connection.query(deleteTaskQuery, ["d", user_idx], function(err, result) {
         if(err) {
           res.status(500).send({
             status : "fail",
@@ -512,6 +962,82 @@ router.delete('/cancel', function(req, res) {
   });//async.waterfall
 
 });//rouer.get('/cancel')
+// router.delete('/cancel', function(req, res) {
+//   let user_id = req.query.id;
+//   let status = req.query.status;
+//
+//   let taskArray = [
+//     //1. connection 만들기 함수
+//     function(callback) {
+//       if(!(user_id && status) || !(status === "client" || status === "helper")) {
+//         res.status(500).send({
+//           status : "fail",
+//           message : "wrong input"
+//         });
+//         callback("wrong input");
+//       } else {
+//         pool.getConnection(function(err, connection) {
+//           if(err) {
+//             res.status(500).send({
+//               status : "fail",
+//               message : "internal server error : " + err
+//             });//res.status(500).send
+//             callback("internal server error : " + err);
+//           } else {
+//             callback(null, connection);
+//           }
+//         });//pool.getConnection
+//       }
+//     },//function(callback)
+//     //2. select user_idx
+//     function(connection, callback) {
+//       let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';
+//       connection.query(user_idxQuery, user_id, function(err, result) {
+//         if(err) {
+//           res.status(500).send({
+//             status : "fail",
+//             message : "internal server error : " + err
+//           });
+//           connection.release();
+//           callback("internal server error : " + err);
+//         } else {
+//           callback(null, connection, result[0].user_idx);
+//         }
+//       });//connection.query(selectCommentQuery)
+//     },//function(connection, callback)
+//     //3. delete specific data with user_idx
+//     function(connection, user_idx, callback) {
+//       if(status === "client") {
+//         var deleteTaskQuery = 'DELETE FROM curr_task WHERE client_user_user_idx = ?';
+//       } else {
+//         var deleteTaskQuery = 'DELETE FROM curr_Task WHERE helper_user_user_idx = ?';
+//       }
+//       connection.query(deleteTaskQuery, user_idx, function(err, result) {
+//         if(err) {
+//           res.status(500).send({
+//             status : "fail",
+//             message : "internal server error : " + err
+//           });
+//           connection.release();
+//           callback("internal server error : " + err);
+//         } else {
+//           res.status(201).send({
+//             status : "success",
+//             message : "successfully delete data"
+//           });
+//           connection.release();
+//           callback(null, "successfully delete data");
+//         }
+//       });//connection.query(deleteTaskQuery)
+//     }
+//   ];
+//
+//   async.waterfall(taskArray, (err, result) => {
+//     if(err) console.log(err);
+//     else console.log(result);
+//   });//async.waterfall
+//
+// });//rouer.get('/cancel')
 
 router.post('/star', function(req, res) {
   let status = req.body.status; // client or helper
@@ -526,13 +1052,13 @@ router.post('/star', function(req, res) {
    //1. connection 만들기 함수
    function(callback) {
      if(!(status && object.rating && task_idx)) {
-       res.status(500).send({
+       res.status(400).send({
          status : "fail",
          message : "wrong input"
        });
        callback("wrong input")
      } else if(!(status === "client" || status === "helper")) {
-       res.status(500).send({
+       res.status(400).send({
          status : "fail",
          message : "wrong input"
        });
@@ -553,7 +1079,7 @@ router.post('/star', function(req, res) {
    },//function(callback)
    //2.1 mysql 로 user_idx 가져오기
    function(connection, callback) {
-     let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';
+     let user_idxQuery = 'SELECT user_idx FROM user WHERE user_id = ?';
      connection.query(user_idxQuery, user_id, function(err, result) {
        if(err) {
          res.status(500).send({
@@ -563,7 +1089,16 @@ router.post('/star', function(req, res) {
          connection.release();
          callback("internal server error : " + err);
        } else {
-         callback(null, connection, result[0].user_idx);
+         if(result.length === 0) {
+           res.status(400).send({             //user_id가 잘못 되었을 경우
+             status : "fail",
+             message : "wrong input"
+           });
+           connection.release();
+           callback("wrong input");
+         } else { //successfully search all in curr_task
+           callback(null, connection, result[0].user_idx);
+         }
        }
      });//connection.query(selectCommentQuery)
    },//function(connection, callback)
@@ -584,16 +1119,7 @@ router.post('/star', function(req, res) {
          connection.release();
          callback("internal server error : " + err);
        } else {
-         if(result.length === 0) {
-           res.status(500).send({             //user_id가 잘못 되었을 경우
-             status : "fail",
-             message : "wrong user id"
-           });
-           connection.release();
-           callback("wrong user id");
-         } else { //successfully search all in curr_task
-           callback(null, connection, result[0]);
-         }
+         callback(null, connection, result[0]);
        }
      });//connection.query(searchPastTaskQuery)
    },

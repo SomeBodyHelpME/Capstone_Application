@@ -13,7 +13,7 @@ router.post('/login', function(req, res) {
     //1. connection 가져오기
     function(callback) {
       if(!(user.user_id && user.user_pw)) {
-        res.status(500).send({
+        res.status(400).send({
           status : "fail",
           message : "wrong input"
         });
@@ -43,10 +43,10 @@ router.post('/login', function(req, res) {
           callback("internal server error : " + err);
         } else {
           if(result.length === 0) {
-            res.status(500).send({
+            res.status(400).send({
               status : "fail",
               message : "failed login"
-            });//res.status(500).send
+            });//res.status(400).send
             callback("failed login");
           } else {
             crypto.pbkdf2(user.user_pw, result[0].salt, 100000, 32, 'sha512', function(err, hashed) {
@@ -67,10 +67,10 @@ router.post('/login', function(req, res) {
                   callback(null, "success matched");
                 } else {
                   console.log('not matched!!');
-                  res.status(500).send({
+                  res.status(400).send({
                     status : "fail",
                     message : "failed login"
-                  });//res.status(500)
+                  });//res.status(400)
                   callback(null, "failed login");
                 }//fourth if
               }//third if
@@ -93,7 +93,7 @@ router.get('/register/check/:user_id', function(req, res) {
     //1. connection 가져오기
     function(callback) {
       if(!user_id) {
-        res.status(500).send({
+        res.status(400).send({
           status : "fail",
           message : "wrong input"
         });
@@ -123,10 +123,10 @@ router.get('/register/check/:user_id', function(req, res) {
           callback("internal server error : " + err);
         } else {
           if(result.length === 0) {
-            res.status(500).send({
+            res.status(400).send({
               status : "fail",
               message : "there is no id"
-            });//res.status(500).send
+            });//res.status(400).send
             callback("no id : ");
           } else {
             res.status(200).send({
@@ -153,13 +153,12 @@ router.post('/register', function(req, res) {
     user_name : req.body.user_name,
 //    user_pw : req.body.user_pw,
     phone : req.body.phone,
-    image : req.body.image,
     about : req.body.about
   };
   let taskArray = [
     function(callback) {
       if(!(user.user_id && user.user_name && req.body.user_pw)) {
-        res.status(500).send({
+        res.status(400).send({
           status : "fail",
           message : "input error"
         });
@@ -173,12 +172,12 @@ router.post('/register', function(req, res) {
         if(err) {
           res.status(500).send({
             status : "fail",
-            message : "fail to crypto"
+            message : "internal server error : " + err
           });
-          callback("fail : " + err);
+          callback("internal server error : " + err);
         } else {
           user.salt = buffer.toString('base64');
-          console.log(user.salt);
+          //console.log(user.salt);
           callback(null);
         }
       });//crypto.randomBytes
@@ -188,9 +187,9 @@ router.post('/register', function(req, res) {
         if(err) {
           res.status(500).send({
             status : "fail",
-            message : "fail to crypto"
+            message : "internal server error : " + err
           });
-          callback("fail : " + err);
+          callback("internal server error : " + err);
         } else {
           console.log('Successful change password!');
           user.user_pw = hashed.toString('base64');
@@ -205,19 +204,19 @@ router.post('/register', function(req, res) {
             status : "fail",
             message : "internal server error : " + err
           });
-          callback("get connection err : " + err);
+          callback("internal server error : " + err);
         }
         else {
           var insertJoinQuery = 'INSERT INTO user (user_name, user_idx, salt, user_id, user_pw, phone, money, about) VALUES (?,?,?,?,?,?,?,?)';
           connection.query(insertJoinQuery, [user.user_name, null, user.salt, user.user_id, user.user_pw, user.phone, 0, user.about], function(err) {
-            console.log(user);
+            //console.log(user);
             if(err) {
               res.status(500).send({
                 status : "fail",
-                message : "failed register"
+                message : "internal server error : " + err
               });//res.status(500).send
               connection.release();
-              callback("failed register : " + err);
+              callback("internal server error : " + err);
             } else {
               let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';
               connection.query(user_idxQuery, user.user_id, function(err, result) {
@@ -227,7 +226,7 @@ router.post('/register', function(req, res) {
                     message : "internal server error : " + err
                   });
                   connection.release();
-                  console.log("internal server error : " + err);
+                  callback("internal server error : " + err);
                 } else {
                   let insertClientQuery = 'INSERT INTO client (rating, count, user_user_idx) VALUES (?,?,?)';
                   connection.query(insertClientQuery, [0, 0, result[0].user_idx], function(err2) {
@@ -237,7 +236,7 @@ router.post('/register', function(req, res) {
                         message : "internal server error : " + err
                       });
                       connection.release();
-                      console.log("internal server error : " + err);
+                      callback("internal server error : " + err);
                     } else {
                       let insertHelperQuery = 'INSERT INTO helper (rating, count, user_user_idx) VALUES (?,?,?)';
                       connection.query(insertHelperQuery, [0, 0, result[0].user_idx], function(err3) {
@@ -247,7 +246,7 @@ router.post('/register', function(req, res) {
                             message : "internal server error : " + err
                           });
                           connection.release();
-                          console.log("internal server error : " + err);
+                          callback("internal server error : " + err);
                         } else {
                           let insertBookMarkQuery = 'INSERT INTO bookmark (user_user_idx) VALUES (?)';
                           connection.query(insertBookMarkQuery, result[0].user_idx, function(err4) {
@@ -257,7 +256,7 @@ router.post('/register', function(req, res) {
                                 message : "internal server error : " + err
                               });
                               connection.release();
-                              console.log("internal server error : " + err);
+                              callback("internal server error : " + err);
                             } else {
                               res.status(201).send({
                                 status : "success",
@@ -290,7 +289,7 @@ router.post('/register', function(req, res) {
 router.get('/find/id', function(req, res) {
   var user_name = req.query.user_name;
   if(!user_name) {
-    res.status(500).send({
+    res.status(400).send({
       status : "fail",
       message : "wrong input"
     });
@@ -315,10 +314,10 @@ router.get('/find/id', function(req, res) {
             console.log("internal server error : " + err);
           } else {
             if(result.length === 0) {   //second if
-              res.status(500).send({
+              res.status(400).send({
                 status : "fail",
                 message : "there is no name"
-              });//res.status(500).send
+              });//res.status(400).send
               console.log("there is no name");
             } else {
               res.status(200).send({
@@ -339,7 +338,7 @@ router.get('/find/id', function(req, res) {
 router.get('/find/pw', function(req, res) {
   var user_id = req.query.user_id;
   if(!user_id) {
-    res.status(500).send({
+    res.status(400).send({
       status : "fail",
       message : "wrong input"
     });
@@ -363,10 +362,10 @@ router.get('/find/pw', function(req, res) {
             console.log("internal server error : " + err);
           } else {
             if(result.length === 0) {   //second if
-              res.status(500).send({
+              res.status(400).send({
                 status : "fail",
                 message : "There is no id"
-              });//res.status(500).send
+              });//res.status(400).send
               console.log("There is no id");
             } else {
               res.status(200).send({
