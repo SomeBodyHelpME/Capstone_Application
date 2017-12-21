@@ -63,9 +63,9 @@ router.get('/client/check', function(req, res) {
       });//connection.query(selectCommentQuery)
     },//function(connection, callback)
     //3. search client's task
-    function(connection, user_idx callback) {
-      let findClientTaskQuery = 'SELECT * FROM curr_task WHERE client_user_user_idx = ?';
-      connection.query(findClientTaskQuery, user_idx, function(err, result) {
+    function(connection, user_idx, callback) {
+      let findClientTaskQuery = 'SELECT * FROM curr_task WHERE client_user_user_idx = ? AND status = ?';
+      connection.query(findClientTaskQuery, [user_idx, "w"], function(err, result) {
         if(err) {
           res.status(500).send({
             status : "fail",
@@ -104,7 +104,7 @@ router.post('/client', function(req, res) {
   var user_id = req.body.user_id;
   var object = {
     task_type : req.body.task_type,
-    cost : req.body.cost,
+    cost : parseInt(req.body.cost),
     details : req.body.details,
     registertime : moment().format("YYYYMMDDHHmmss"),       //register time
     deadline : req.body.deadline,
@@ -114,19 +114,25 @@ router.post('/client', function(req, res) {
     dest_name : req.body.dest_name,
     status : "w"
   };
+  console.log(object.dest_lat, object.dest_long);
+  console.log(object.task_type);
+  console.log(object.cost);
+  console.log(object.details);
+  console.log(object.dest_name);
+  console.log(object.requiredtime);
 
-  if(!(user_id && object.task_type && object.cost && object.details && object.dest_lat && object.dest_long && object.dest_name && object.requiredtime)) {
+  if(!(user_id && object.deadline && object.task_type && object.cost && object.details && object.dest_lat && object.dest_long && object.dest_name && object.requiredtime)) {
     res.status(400).send({
       status : "fail",
-      message : "wrong input"
+      message : "wrong input1"
     });
-    console.log("wrong input");
+    console.log("wrong input1");
   } else {
     pool.getConnection(function(err, connection) {
       if(err) {
         res.status(500).send({
           status : "fail",
-          message : "internal server error : " + err
+          message : "internal server error1 : " + err
         });
         console.log("internal server error : " + err);
       } else {
@@ -135,23 +141,23 @@ router.post('/client', function(req, res) {
           if(err) {
             res.status(500).send({
               status : "fail",
-              message : "internal server error : " + err
+              message : "internal server error2 : " + err
             });
             console.log("internal server error : " + err);
           } else {
             if(result.length === 0) {
               res.status(400).send({
                 status : "fail",
-                message : "wrong input"
+                message : "wrong input2"
               });
-              console.log("wrong input");
+              console.log("wrong input2");
             } else {
               let clientHistoryQuery = 'SELECT rating, count FROM client WHERE user_user_idx = ?';
               connection.query(clientHistoryQuery, result[0].user_idx, function(err, result2) {
                 if(err) {
                   res.status(500).send({
                     status : "fail",
-                    message : "internal server error : " + err
+                    message : "internal server error3 : " + err
                   });
                   console.log("internal server error : " + err);
                 } else {
@@ -160,7 +166,7 @@ router.post('/client', function(req, res) {
                     if(err1) {
                       res.status(500).send({
                         status : "fail",
-                        message : "internal server error : " + err
+                        message : "internal server error4 : " + err
                       });
                       console.log("internal server error : " + err);
                     } else {
@@ -169,7 +175,7 @@ router.post('/client', function(req, res) {
                         if(err2) {
                           res.status(500).send({
                             status : "fail",
-                            message : "internal server error : " + err
+                            message : "internal server error5 : " + err
                           });
                           console.log("internal server error : " + err);
                         } else {
@@ -216,12 +222,12 @@ router.get('/helper', function(req, res) {
   var workplace_long = parseFloat(req.query.workplace_long);
   var user_id = req.query.user_id;
   var task_type = req.query.task_type;
-  var importantValue = req.query.imval; //price || distance || time
+  var importantvalue = req.query.importantvalue; //price || distance || time
   var middle_lat = (home_lat + workplace_lat) / 2;
   var middle_long = (home_long + workplace_long) / 2;
   var radius = radius_func(home_lat, home_long, workplace_lat, workplace_long);
 
-  if(!(user_id && home_lat && home_long && workplace_lat && workplace_long && task_type && importantValue)) {
+  if(!(user_id && home_lat && home_long && workplace_lat && workplace_long && importantvalue)) {
     res.status(400).send({
       status : "fail",
       message : "wrong input"
@@ -237,17 +243,17 @@ router.get('/helper', function(req, res) {
         console.log("internal server error : " + err);
       } else {
         let distanceCheckQuery = 'SELECT * FROM curr_task WHERE (? * ?) > ((dest_lat - ?) * (dest_lat - ?)) + ((dest_long - ?) * (dest_long - ?)) AND status = ?';
-        if(importantValue === "p") {                  //price 우선
+        if(importantvalue === "p") {                  //price 우선
           var additionalQuery = 'ORDER BY cost DESC';
           var obj = [radius, radius, middle_lat, middle_lat, middle_long, middle_long, "w"];
-        } else if(importantValue === "d") {           //distance 우선
+        } else if(importantvalue === "d") {           //distance 우선
           var additionalQuery = 'ORDER BY ((dest_lat - ?) * (dest_lat - ?)) + ((dest_long - ?) * (dest_long - ?)) + ((dest_lat - ?) * (dest_lat - ?)) + ((dest_long - ?) * (dest_long - ?))';
           var obj = [radius, radius, middle_lat, middle_lat, middle_long, middle_long, home_lat, home_lat, home_long, home_long, workplace_lat, workplace_lat, workplace_long, workplace_long, "w"];
-        } else if(importantValue === "t") {           //time 우선
+        } else if(importantvalue === "t") {           //time 우선
           var additionalQuery = 'ORDER BY (cost / requiredtime) DESC';
           var obj = [radius, radius, middle_lat, middle_lat, middle_long, middle_long, "w"];
         } else {                                      //의뢰 등록 우선
-          var additionalQuery = 'ORDER BY task_idx';
+          var additionalQuery = '';
           var obj = [radius, radius, middle_lat, middle_lat, middle_long, middle_long, "w"];
         }
         var wholeQuery = distanceCheckQuery + additionalQuery;
@@ -260,69 +266,21 @@ router.get('/helper', function(req, res) {
             connection.release();
             console.log("internal server error : " + err);
           } else {
+            console.log(result);
             res.status(200).send({
               status : "success",
               message : "successfully search task",
               data : result
             });
             connection.release();
-            console.log(null, "successfully search task");
+            console.log("successfully search task");
           }
         });//connection.query(distanceCheckQuery)
       }
     });//pool.getConnection(function(err, connection))
   }
 });//router.get('/helper')
-// router.get('/helper', function(req, res) {
-//   var home_lat = parseFloat(req.query.home_lat);
-//   var home_long = parseFloat(req.query.home_long);
-//   var workplace_lat = parseFloat(req.query.workplace_lat);
-//   var workplace_long = parseFloat(req.query.workplace_long);
-//   var user_id = req.query.user_id;
-//   var middle_lat = (home_lat + workplace_lat) / 2;
-//   var middle_long = (home_long + workplace_long) / 2;
-//   var radius = radius_func(home_lat, home_long, workplace_lat, workplace_long);
-//
-//   if(!(user_id && home_lat && home_long && workplace_lat && workplace_long)) {
-//     res.status(500).send({
-//       status : "fail",
-//       message : "wrong input"
-//     });
-//     console.log("wrong input");
-//   } else {
-//     pool.getConnection(function(err, connection) {
-//       if(err) {
-//         res.status(500).send({
-//           status : "fail",
-//           message : "internal server error : " + err
-//         });
-//         console.log("internal server error : " + err);
-//       } else {
-//         let distanceCheckQuery = 'SELECT * FROM curr_task WHERE (? * ?) > ((workplace_lat - ?) * (workplace_lat - ?)) + ((workplace_long - ?) * (workplace_long - ?)) '
-//                                                      + 'AND (? * ?) > ((home_lat - ?) * (home_lat - ?)) + ((home_long - ?) * (home_long - ?)) AND status = ?';
-//         let radius = radius_func(home_lat, home_long, workplace_lat, workplace_long);
-//         connection.query(distanceCheckQuery, [radius, radius, middle_lat, middle_lat, middle_long, middle_long, radius, radius, middle_lat, middle_lat, middle_long, middle_long, "w"], function(err, result) {
-//           if(err) {
-//             res.status(500).send({
-//               status : "fail",
-//               message : "internal server error" + err
-//             });
-//             connection.release();
-//             console.log("internal server error : " + err);
-//           } else {
-//             res.status(200).send({
-//               status : "success",
-//               message : "successfully search task",
-//               data : result
-//             });
-//             connection.release();
-//             console.log(null, "successfully search task");
-//           }
-//         });//connection.query(distanceCheckQuery)
-//       }
-//     });//pool.getConnection(function(err, connection))
-//   }
-// });//router.get('/helper')
+
 
 // 의뢰인이 수락 버튼 눌렀을 때(12/7 수정)
 // client가 들어오는 라우터
@@ -882,8 +840,9 @@ router.get('/refresh', function(req, res) {
   });//async.waterfall
 });
 
-router.delete('/cancel', function(req, res) {
-  let user_id = req.query.id;
+router.get('/cancel', function(req, res) {
+  let user_id = req.query.user_id;
+  let status = req.query.status;
 
   let taskArray = [
     //1. connection 만들기 함수
@@ -935,7 +894,18 @@ router.delete('/cancel', function(req, res) {
     },//function(connection, callback)
     //3. delete specific data with user_idx
     function(connection, user_idx, callback) {
-      var deleteTaskQuery = 'UPDATE curr_task SET task_type = ? WHERE client_user_user_idx = ?';
+      if(status === "client") {
+        var deleteTaskQuery = 'UPDATE curr_task SET status = ? WHERE client_user_user_idx = ?';
+      } else if(status === "helper") {
+        var deleteTaskQuery = 'UPDATE curr_task SET status = ? WHERE helper_user_user_idx = ?';
+      } else {
+        connection.release();
+        res.status(400).send({
+          status : "fail",
+          message : "wrong input"
+        });
+        callback("wrong input");
+      }
       connection.query(deleteTaskQuery, ["d", user_idx], function(err, result) {
         if(err) {
           res.status(500).send({
@@ -962,82 +932,6 @@ router.delete('/cancel', function(req, res) {
   });//async.waterfall
 
 });//rouer.get('/cancel')
-// router.delete('/cancel', function(req, res) {
-//   let user_id = req.query.id;
-//   let status = req.query.status;
-//
-//   let taskArray = [
-//     //1. connection 만들기 함수
-//     function(callback) {
-//       if(!(user_id && status) || !(status === "client" || status === "helper")) {
-//         res.status(500).send({
-//           status : "fail",
-//           message : "wrong input"
-//         });
-//         callback("wrong input");
-//       } else {
-//         pool.getConnection(function(err, connection) {
-//           if(err) {
-//             res.status(500).send({
-//               status : "fail",
-//               message : "internal server error : " + err
-//             });//res.status(500).send
-//             callback("internal server error : " + err);
-//           } else {
-//             callback(null, connection);
-//           }
-//         });//pool.getConnection
-//       }
-//     },//function(callback)
-//     //2. select user_idx
-//     function(connection, callback) {
-//       let user_idxQuery = 'SELECT * FROM user WHERE user_id = ?';
-//       connection.query(user_idxQuery, user_id, function(err, result) {
-//         if(err) {
-//           res.status(500).send({
-//             status : "fail",
-//             message : "internal server error : " + err
-//           });
-//           connection.release();
-//           callback("internal server error : " + err);
-//         } else {
-//           callback(null, connection, result[0].user_idx);
-//         }
-//       });//connection.query(selectCommentQuery)
-//     },//function(connection, callback)
-//     //3. delete specific data with user_idx
-//     function(connection, user_idx, callback) {
-//       if(status === "client") {
-//         var deleteTaskQuery = 'DELETE FROM curr_task WHERE client_user_user_idx = ?';
-//       } else {
-//         var deleteTaskQuery = 'DELETE FROM curr_Task WHERE helper_user_user_idx = ?';
-//       }
-//       connection.query(deleteTaskQuery, user_idx, function(err, result) {
-//         if(err) {
-//           res.status(500).send({
-//             status : "fail",
-//             message : "internal server error : " + err
-//           });
-//           connection.release();
-//           callback("internal server error : " + err);
-//         } else {
-//           res.status(201).send({
-//             status : "success",
-//             message : "successfully delete data"
-//           });
-//           connection.release();
-//           callback(null, "successfully delete data");
-//         }
-//       });//connection.query(deleteTaskQuery)
-//     }
-//   ];
-//
-//   async.waterfall(taskArray, (err, result) => {
-//     if(err) console.log(err);
-//     else console.log(result);
-//   });//async.waterfall
-//
-// });//rouer.get('/cancel')
 
 router.post('/star', function(req, res) {
   let status = req.body.status; // client or helper
